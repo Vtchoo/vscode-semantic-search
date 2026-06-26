@@ -12,7 +12,7 @@ export const MODELS: ModelInfo[] = [
     queryPrefix: 'Represent this sentence for searching relevant passages: ',
   },
   {
-    id: 'Snowflake/snowflake-arctic-embed-m',
+    id: 'Snowflake/snowflake-arctic-embed-m-v1.5',
     name: 'Snowflake Arctic Embed M (balanced)',
     queryPrefix: 'Represent this sentence for searching relevant passages: ',
   },

@@ -83,6 +83,18 @@
           "type": "number",
           "default": 10,
           "description": "Number of results to return per search"
+        },
+        "semanticSearch.dtype": {
+          "type": "string",
+          "default": "q8",
+          "enum": ["q4", "q8", "fp16", "fp32"],
+          "enumDescriptions": [
+            "q4 — Smallest (lowest RAM, fastest, slight quality loss)",
+            "q8 — Recommended (good quality, ~2–4× smaller than fp32)",
+            "fp16 — Half precision (better quality, ~2× fp32 size)",
+            "fp32 — Full precision (best quality, most RAM)"
+          ],
+          "description": "ONNX quantisation level for the embedding model. Lower = less RAM."
         }
       }
     }

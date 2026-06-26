@@ -39,9 +39,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try {
       const cfg = getConfig();
       const modelId = cfg.get<string>('model')!;
+      const dtype = cfg.get<string>('dtype') ?? 'q8';
       const modelCachePath = path.join(context.globalStorageUri.fsPath, 'model-cache');
 
-      await embedder!.init(modelId, modelCachePath, (msg) => {
+      await embedder!.init(modelId, dtype, modelCachePath, (msg) => {
         sidebar!.post({ type: 'indexProgress', message: msg, percent: 0 });
       });
 
@@ -69,13 +70,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const cfg = getConfig();
     const modelId = cfg.get<string>('model')!;
+    const dtype = cfg.get<string>('dtype') ?? 'q8';
     const modelCachePath = path.join(context.globalStorageUri.fsPath, 'model-cache');
 
     const tokenSource = new vscode.CancellationTokenSource();
 
     try {
       // Load model first with progress
-      await embedder!.init(modelId, modelCachePath, (msg, pct) => {
+      await embedder!.init(modelId, dtype, modelCachePath, (msg, pct) => {
         sidebar!.post({ type: 'indexProgress', message: msg, percent: pct ?? 0 });
       });
 

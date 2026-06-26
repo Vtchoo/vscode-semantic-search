@@ -5,24 +5,59 @@ type ProgressCallback = (message: string, percent?: number) => void;
 export class EmbeddingService {
   private extractor: any = null;
   private currentModelId = '';
-  private cachePath = '';
+  private currentDtype = '';
+  // In-flight init promise — concurrent callers for the same model+dtype share one load
+  private loadingPromise: Promise<void> | null = null;
+  private loadingKey = '';
 
-  async init(modelId: string, cachePath: string, onProgress?: ProgressCallback): Promise<void> {
-    if (this.extractor && this.currentModelId === modelId) return;
+  async init(
+    modelId: string,
+    dtype: string,
+    cachePath: string,
+    onProgress?: ProgressCallback,
+  ): Promise<void> {
+    const key = `${modelId}::${dtype}`;
 
-    this.cachePath = cachePath;
+    // Already loaded with the same model and dtype — fast path
+    if (this.extractor && this.currentModelId === modelId && this.currentDtype === dtype) return;
 
-    // Dynamically import to defer heavy ONNX runtime load
+    // Another caller is already loading the same combination — join that work
+    if (this.loadingPromise && this.loadingKey === key) {
+      return this.loadingPromise;
+    }
+
+    this.loadingKey = key;
+    console.log(`Loading embedding model: ${modelId} (${dtype})`);
+    this.loadingPromise = this._load(modelId, dtype, cachePath, onProgress).finally(() => {
+      this.loadingPromise = null;
+      this.loadingKey = '';
+    });
+
+    return this.loadingPromise;
+  }
+
+  private async _load(
+    modelId: string,
+    dtype: string,
+    cachePath: string,
+    onProgress?: ProgressCallback,
+  ): Promise<void> {
     const { pipeline, env } = await import('@huggingface/transformers');
 
     env.cacheDir = cachePath;
     env.allowLocalModels = false;
 
-    onProgress?.(`Loading model: ${modelId}`, 0);
+    onProgress?.(`Loading model: ${modelId} (${dtype})`, 0);
+
+    // Release the previous model's ONNX session before allocating a new one
+    if (this.extractor) {
+      try { await this.extractor.dispose(); } catch { /* ignore if not supported */ }
+      this.extractor = null;
+    }
 
     let lastPct = -1;
     this.extractor = await pipeline('feature-extraction', modelId, {
-      dtype: 'q8',
+      dtype,
       progress_callback: (progress: any) => {
         if (progress.status === 'downloading' || progress.status === 'progress') {
           const pct = progress.total
@@ -31,10 +66,7 @@ export class EmbeddingService {
           if (pct !== lastPct) {
             lastPct = pct;
             const name = (progress.file as string | undefined)?.split('/').pop() ?? '';
-            onProgress?.(
-              `Downloading ${name} (${pct}%)`,
-              pct,
-            );
+            onProgress?.(`Downloading ${name} (${pct}%)`, pct);
           }
         } else if (progress.status === 'loading') {
           onProgress?.('Loading model into memory…', 99);
@@ -43,6 +75,7 @@ export class EmbeddingService {
     } as any);
 
     this.currentModelId = modelId;
+    this.currentDtype = dtype;
     onProgress?.('Model ready', 100);
   }
 
@@ -52,8 +85,7 @@ export class EmbeddingService {
 
   /** Embed a single query string (prepends query prefix when needed). */
   async embedQuery(query: string): Promise<Float32Array> {
-    const text = this.queryPrefix + query;
-    return this.embedBatch([text]).then((r) => r[0]);
+    return this.embedBatch([this.queryPrefix + query]).then((r) => r[0]);
   }
 
   /** Embed a batch of document strings. Returns one Float32Array per input. */
@@ -63,17 +95,13 @@ export class EmbeddingService {
 
     const output = await this.extractor(texts, { pooling: 'mean', normalize: true });
 
-    // output.dims = [batchSize, hiddenSize]
     const [batchSize, hiddenSize] = output.dims as [number, number];
     const result: Float32Array[] = [];
 
     for (let i = 0; i < batchSize; i++) {
-      // Slice the flat data buffer into per-item embeddings
-      const slice = (output.data as Float32Array).slice(
-        i * hiddenSize,
-        (i + 1) * hiddenSize,
+      result.push(
+        (output.data as Float32Array).slice(i * hiddenSize, (i + 1) * hiddenSize),
       );
-      result.push(slice);
     }
 
     return result;
