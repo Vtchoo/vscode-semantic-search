@@ -1,0 +1,106 @@
+{
+  "name": "vscode-semantic-search",
+  "displayName": "Semantic Search",
+  "description": "AI-powered semantic search for your workspace using local embeddings",
+  "version": "0.1.0",
+  "publisher": "vscode-semantic-search",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "keywords": ["search", "semantic", "AI", "embeddings", "vector"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "semanticSearch",
+          "title": "Semantic Search",
+          "icon": "resources/sparkle.svg"
+        }
+      ]
+    },
+    "views": {
+      "semanticSearch": [
+        {
+          "type": "webview",
+          "id": "semanticSearch.sidebar",
+          "name": "Semantic Search"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "semanticSearch.indexAll",
+        "title": "Index All Files",
+        "category": "Semantic Search"
+      },
+      {
+        "command": "semanticSearch.clearIndex",
+        "title": "Clear Index",
+        "category": "Semantic Search"
+      }
+    ],
+    "configuration": {
+      "title": "Semantic Search",
+      "properties": {
+        "semanticSearch.model": {
+          "type": "string",
+          "default": "Snowflake/snowflake-arctic-embed-s",
+          "enum": [
+            "Snowflake/snowflake-arctic-embed-s",
+            "Snowflake/snowflake-arctic-embed-m",
+            "Snowflake/snowflake-arctic-embed-l",
+            "BAAI/bge-small-en-v1.5",
+            "BAAI/bge-base-en-v1.5",
+            "sentence-transformers/all-MiniLM-L6-v2"
+          ],
+          "enumDescriptions": [
+            "Snowflake Arctic Embed S — Fast & compact (recommended)",
+            "Snowflake Arctic Embed M — Balanced speed/accuracy",
+            "Snowflake Arctic Embed L — Best accuracy, slowest",
+            "BGE Small EN v1.5 — Fast English model",
+            "BGE Base EN v1.5 — Balanced English model",
+            "all-MiniLM-L6-v2 — Good multilingual support"
+          ],
+          "description": "Embedding model for semantic search (downloaded and cached on first use)"
+        },
+        "semanticSearch.maxFileSizeKb": {
+          "type": "number",
+          "default": 512,
+          "description": "Maximum file size to index, in KB (default: 512)"
+        },
+        "semanticSearch.chunkLines": {
+          "type": "number",
+          "default": 40,
+          "description": "Lines per chunk when splitting files for indexing"
+        },
+        "semanticSearch.chunkOverlapLines": {
+          "type": "number",
+          "default": 8,
+          "description": "Overlap between consecutive chunks in lines"
+        },
+        "semanticSearch.topK": {
+          "type": "number",
+          "default": 10,
+          "description": "Number of results to return per search"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "vscode:prepublish": "node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.0.0",
+    "@lancedb/lancedb": "^0.14.0",
+    "ignore": "^5.3.1"
+  }
+}
