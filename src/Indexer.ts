@@ -160,7 +160,7 @@ async function buildIgnoreFilter(root: string): Promise<(filePath: string) => bo
     'Thumbs.db',
   ]);
 
-  for (const name of ['.gitignore', '.semsearchignore']) {
+  for (const name of ['.gitignore', '.semanticignore']) {
     const ignoreFile = path.join(root, name);
     if (fs.existsSync(ignoreFile)) {
       try {
