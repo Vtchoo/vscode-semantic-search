@@ -36,6 +36,16 @@ export const MODELS: ModelInfo[] = [
     name: 'all-MiniLM-L6-v2 (multilingual)',
     queryPrefix: '',
   },
+  {
+    id: 'Salesforce/SFR-Embedding-Code-400M_R',
+    name: 'SFR Embedding Code 400M (code-focused)',
+    queryPrefix: 'Represent this sentence for searching relevant passages: ',
+  },
+  {
+    id: 'jinaai/jina-code-embeddings-1.5b',
+    name: 'Jina Code Embeddings 1.5B (code-focused, large)',
+    queryPrefix: '',
+  },
 ];
 
 export function getModelInfo(modelId: string): ModelInfo {
