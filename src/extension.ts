@@ -12,14 +12,14 @@ let indexer: Indexer | null = null;
 let sidebar: SidebarProvider | null = null;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
 
-  // Derive a short stable hash for the workspace path so DB files don't collide
-  const workspaceId = workspaceRoot
-    ? crypto.createHash('md5').update(workspaceRoot).digest('hex').slice(0, 8)
+  // Stable short hash keyed on the workspace URI string (works for any scheme)
+  const workspaceId = workspaceUri
+    ? crypto.createHash('md5').update(workspaceUri.toString()).digest('hex').slice(0, 8)
     : 'no-workspace';
 
-  // Store DB in global extension storage (persists across workspace opens)
+  // globalStorageUri is always local — fine for DB and model cache
   const storagePath = context.globalStorageUri.fsPath;
 
   db = new VectorDatabase(storagePath, workspaceId);
@@ -32,7 +32,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- sidebar handlers ----
   sidebar.onSearch = async (query) => {
-    if (!workspaceRoot) {
+    if (!workspaceUri) {
       sidebar!.post({ type: 'error', message: 'No workspace folder open.' });
       return;
     }
@@ -47,13 +47,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       });
 
       const queryVec = await embedder!.embedQuery(query);
-
       const topK = cfg.get<number>('topK') ?? 10;
       const raw = await db!.search(queryVec, topK);
 
+      const rootPath = workspaceUri.path.replace(/\/$/, '');
       const results = raw.map((r) => ({
         ...r,
-        relativePath: path.relative(workspaceRoot, r.filePath).replace(/\\/g, '/'),
+        // Derive a display-friendly relative path from the stored URI string
+        relativePath: (() => {
+          try {
+            const fileUri = vscode.Uri.parse(r.filePath);
+            return fileUri.path.slice(rootPath.length).replace(/^\//, '') || r.filePath;
+          } catch {
+            return r.filePath;
+          }
+        })(),
       }));
 
       sidebar!.post({ type: 'searchResults', results });
@@ -63,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   sidebar.onIndexAll = async () => {
-    if (!workspaceRoot) {
+    if (!workspaceUri) {
       sidebar!.post({ type: 'error', message: 'No workspace folder open.' });
       return;
     }
@@ -76,13 +84,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tokenSource = new vscode.CancellationTokenSource();
 
     try {
-      // Load model first with progress
       await embedder!.init(modelId, dtype, modelCachePath, (msg, pct) => {
         sidebar!.post({ type: 'indexProgress', message: msg, percent: pct ?? 0 });
       });
 
       await indexer!.indexWorkspace(
-        workspaceRoot,
+        workspaceUri,
         modelId,
         {
           maxFileSizeKb: cfg.get<number>('maxFileSizeKb') ?? 512,
@@ -95,8 +102,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         tokenSource.token,
       );
 
-      const stats = db!.getStats();
-      sidebar!.post({ type: 'indexComplete', stats });
+      sidebar!.post({ type: 'indexComplete', stats: db!.getStats() });
     } catch (err) {
       sidebar!.post({ type: 'error', message: String(err) });
     } finally {
@@ -116,7 +122,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  // ---- commands (also accessible from Command Palette) ----
+  // ---- commands ----
   context.subscriptions.push(
     vscode.commands.registerCommand('semanticSearch.indexAll', () => {
       sidebar?.onIndexAll?.();
@@ -134,13 +140,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         sidebar?.onClearIndex?.();
         vscode.window.showInformationMessage('Semantic search index cleared.');
       }
-    }),
-  );
-
-  // Push initial stats to sidebar when it becomes visible
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveColorTheme(() => {
-      // Theme changed — no-op but can be used later for updates
     }),
   );
 }

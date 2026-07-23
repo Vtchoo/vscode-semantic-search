@@ -42,7 +42,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.onClearIndex?.();
           break;
         case 'openFile': {
-          const uri = vscode.Uri.file(raw.filePath);
+          // filePath is stored as a URI string (works for file://, vscode-remote://, etc.)
+          const uri = vscode.Uri.parse(raw.filePath);
           vscode.window.showTextDocument(uri, {
             selection: new vscode.Range(raw.line, 0, raw.line, 0),
             preview: true,
@@ -143,7 +144,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   .progress-wrap.visible { display: flex; }
   .progress-bar-track {
     height: 3px;
-    background: var(--vscode-progressBar-background, #007acc22);
+    background: var(--vscode-input-background, #007acc22);
     border-radius: 2px;
     overflow: hidden;
   }
