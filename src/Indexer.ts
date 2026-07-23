@@ -58,7 +58,7 @@ export class Indexer {
 
     onProgress(`${toIndex.length} of ${allFiles.length} files need indexing…`, 2);
 
-    const batchSize = config.batchSize ?? 8;
+    const batchSize = config.batchSize ?? 4;
     let done = 0;
 
     for (let i = 0; i < toIndex.length; i += batchSize) {

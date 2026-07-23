@@ -56,6 +56,7 @@ export class EmbeddingService {
     }
 
     let lastPct = -1;
+    console.log(`Downloading and initializing embedding model: ${modelId} (${dtype})`);
     this.extractor = await pipeline('feature-extraction', modelId, {
       dtype,
       progress_callback: (progress: any) => {
@@ -88,20 +89,29 @@ export class EmbeddingService {
     return this.embedBatch([this.queryPrefix + query]).then((r) => r[0]);
   }
 
-  /** Embed a batch of document strings. Returns one Float32Array per input. */
-  async embedBatch(texts: string[]): Promise<Float32Array[]> {
+  /** Embed a batch of document strings. Returns one Float32Array per input.
+   *
+   * Internally processes in sub-batches to cap the peak ONNX attention-matrix
+   * allocation (batch × heads × seqLen² per layer). Without this, sending 80+
+   * texts at once can allocate several GB of intermediate tensors even for a
+   * tiny model.
+   */
+  async embedBatch(texts: string[], subBatchSize = 4): Promise<Float32Array[]> {
     if (!this.extractor) throw new Error('Model not loaded. Call init() first.');
     if (texts.length === 0) return [];
 
-    const output = await this.extractor(texts, { pooling: 'mean', normalize: true });
-
-    const [batchSize, hiddenSize] = output.dims as [number, number];
     const result: Float32Array[] = [];
 
-    for (let i = 0; i < batchSize; i++) {
-      result.push(
-        (output.data as Float32Array).slice(i * hiddenSize, (i + 1) * hiddenSize),
-      );
+    for (let i = 0; i < texts.length; i += subBatchSize) {
+      const slice = texts.slice(i, i + subBatchSize);
+      const output = await this.extractor(slice, { pooling: 'mean', normalize: true });
+
+      const [batchSize, hiddenSize] = output.dims as [number, number];
+      for (let j = 0; j < batchSize; j++) {
+        result.push(
+          (output.data as Float32Array).slice(j * hiddenSize, (j + 1) * hiddenSize),
+        );
+      }
     }
 
     return result;
